@@ -1,14 +1,18 @@
 import { useParams } from "react-router-dom";
-import { useAssetHealth } from "../hooks/useAssets";
 import { usePrices } from "../hooks/usePrices";
+import { useLiquidity } from "../hooks/useLiquidity";
 import HealthScoreCard from "../components/HealthScoreCard";
 import PriceChart from "../components/PriceChart";
 import LiquidityDepthChart from "../components/LiquidityDepthChart";
+import { TimeRangeSelector } from "../components/TimeRangeSelector";
+import AddToWatchlistButton from "../components/watchlist/AddToWatchlistButton";
 
 export default function AssetDetail() {
   const { symbol } = useParams<{ symbol: string }>();
-  const { data: healthData } = useAssetHealth(symbol ?? "");
   const { data: priceData, isLoading: priceLoading } = usePrices(symbol ?? "");
+  const { data: liquidityData, isLoading: liquidityLoading } = useLiquidity(
+    symbol ?? ""
+  );
 
   if (!symbol) {
     return (
@@ -20,54 +24,64 @@ export default function AssetDetail() {
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-3xl font-bold text-white">{symbol}</h1>
+      {/* Header */}
+      <div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-3xl font-bold text-white">{symbol}</h1>
+          <AddToWatchlistButton symbol={symbol} className="text-sm" />
+        </div>
         <p className="mt-2 text-stellar-text-secondary">
           Detailed monitoring for {symbol} on the Stellar network
         </p>
-      </header>
+      </div>
 
+      {/* Health Score */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <HealthScoreCard
           symbol={symbol}
-          overallScore={healthData?.overallScore ?? null}
-          factors={healthData?.factors ?? null}
-          trend={healthData?.trend ?? null}
+          overallScore={null}
+          factors={null}
+          trend={null}
         />
         <div className="lg:col-span-2">
+          <TimeRangeSelector chartId={`price-${symbol}`} title="Price chart range" />
           <PriceChart
             symbol={symbol}
             data={priceData?.history ?? []}
             isLoading={priceLoading}
+            chartId={`price-${symbol}`}
           />
         </div>
       </div>
 
-      <LiquidityDepthChart symbol={symbol} data={[]} isLoading={false} />
+      {/* Liquidity Depth */}
+      <div className="space-y-3">
+        <TimeRangeSelector
+          chartId={`liquidity-${symbol}`}
+          title="Liquidity chart range"
+          showApplyGlobally={false}
+        />
+        <LiquidityDepthChart
+          symbol={symbol}
+          data={liquidityData?.sources ?? []}
+          isLoading={liquidityLoading}
+          chartId={`liquidity-${symbol}`}
+        />
+      </div>
 
+      {/* Price Sources Table */}
       <div className="bg-stellar-card border border-stellar-border rounded-lg p-6">
         <h3 className="text-lg font-semibold text-white mb-4">
           Price Sources
         </h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <caption className="sr-only">
-              Price sources for {symbol} including last update times
-            </caption>
             <thead>
               <tr className="text-left text-stellar-text-secondary border-b border-stellar-border">
-                <th scope="col" className="pb-3 pr-4">
-                  Source
-                </th>
-                <th scope="col" className="pb-3 pr-4">
-                  Price
-                </th>
-                <th scope="col" className="pb-3 pr-4">
-                  Last Updated
-                </th>
-                <th scope="col" className="pb-3">
-                  Deviation
-                </th>
+                <th className="pb-3 pr-4">Source</th>
+                <th className="pb-3 pr-4">Price</th>
+                <th className="pb-3 pr-4">Last Updated</th>
+                <th className="pb-3">Deviation</th>
               </tr>
             </thead>
             <tbody className="text-white">
@@ -82,9 +96,7 @@ export default function AssetDetail() {
                       key={source.source}
                       className="border-b border-stellar-border"
                     >
-                      <th scope="row" className="py-3 pr-4 font-medium text-white">
-                        {source.source}
-                      </th>
+                      <td className="py-3 pr-4">{source.source}</td>
                       <td className="py-3 pr-4">
                         ${source.price.toFixed(4)}
                       </td>
@@ -111,4 +123,14 @@ export default function AssetDetail() {
       </div>
     </div>
   );
+}
+
+function PriceImpactCalculatorWrapper({ symbol }: { symbol: string }) {
+  // Most assets are traded against XLM in this app
+  const pair: TradingPair = symbol === "XLM" ? "USDC/XLM" : (`${symbol}/XLM` as any);
+  const { depth, isLoading } = useLiquidity(pair);
+
+  if (isLoading && !depth) return <LoadingSpinner message="Loading liquidity data..." />;
+
+  return <PriceImpactCalculator depth={depth} />;
 }
